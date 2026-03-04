@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Route Forecast Tool</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+<style>
+
+body{
+background:#0E0F12;
+color:#E7E9EE;
+font-family:system-ui,-apple-system,Segoe UI,Roboto;
+margin:0;
+padding:40px;
+}
+
+.container{
+max-width:1200px;
+margin:auto;
+}
+
+.header{
+font-size:28px;
+font-weight:600;
+margin-bottom:30px;
+}
+
+.layout{
+display:grid;
+grid-template-columns:420px 1fr;
+gap:30px;
+}
+
+.card{
+background:#14161C;
+border:1px solid rgba(255,255,255,0.08);
+border-radius:12px;
+padding:22px;
+}
+
+.section-title{
+font-size:13px;
+color:#9AA1AD;
+margin-bottom:8px;
+}
+
+.upload{
+border:1px dashed rgba(255,255,255,0.15);
+border-radius:10px;
+padding:18px;
+text-align:center;
+cursor:pointer;
+margin-bottom:12px;
+}
+
+.upload:hover{
+border-color:rgba(255,255,255,0.3);
+}
+
+.fileinfo{
+font-size:13px;
+color:#9AA1AD;
+margin-bottom:12px;
+}
+
+input{
+background:#0E0F12;
+border:1px solid rgba(255,255,255,0.15);
+color:#E7E9EE;
+padding:8px;
+border-radius:6px;
+width:120px;
+}
+
+.button{
+margin-top:20px;
+background:#E6372A;
+border:none;
+padding:10px 16px;
+border-radius:6px;
+color:white;
+cursor:pointer;
+}
+
+.button:hover{
+background:#FF4D4F;
+}
+
+.result{
+background:#0E0F12;
+border-radius:10px;
+padding:20px;
+font-family:ui-monospace,Menlo;
+white-space:pre;
+max-height:600px;
+overflow:auto;
+}
+
+.copy{
+margin-top:10px;
+font-size:13px;
+cursor:pointer;
+color:#9AA1AD;
+}
+
+.copy:hover{
+color:white;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<div class="header">
+Route Forecast Tool
+</div>
+
+<div class="layout">
+
+<div class="card">
+
+<div class="section-title">Current Volume File</div>
+
+<div class="upload" onclick="volInput.click()">
+Drag or Upload File
+</div>
+
+<input type="file" id="volInput" hidden>
+
+<div id="volInfo" class="fileinfo"></div>
+
+
+<div class="section-title">ZIP Mapping File</div>
+
+<div class="upload" onclick="mapInput.click()">
+Drag or Upload File
+</div>
+
+<input type="file" id="mapInput" hidden>
+
+<div id="mapInfo" class="fileinfo"></div>
+
+
+<div class="section-title">Add Volume (10k units)</div>
+
+<input id="addVol" value="1.0">
+
+<div class="fileinfo" id="equiv"></div>
+
+<button class="button" onclick="run()">Generate Forecast</button>
+
+</div>
+
+
+<div class="card">
+
+<div class="section-title">Forecast Result</div>
+
+<div class="result" id="output"></div>
+
+<div class="copy" onclick="copy()">Copy Result</div>
+
+</div>
+
+</div>
+
+</div>
+
+<script>
+
+let volumeData=[]
+let mapData=[]
+
+function readExcel(file){
+
+return new Promise(resolve=>{
+
+let reader=new FileReader()
+
+reader.onload=e=>{
+
+let data=new Uint8Array(e.target.result)
+
+let wb=XLSX.read(data,{type:"array"})
+
+let sheet=wb.Sheets[wb.SheetNames[0]]
+
+let json=XLSX.utils.sheet_to_json(sheet)
+
+resolve(json)
+
+}
+
+reader.readAsArrayBuffer(file)
+
+})
+
+}
+
+function cleanZip(z){
+
+if(!z)return null
+
+z=String(z)
+
+return z.substring(0,5)
+
+}
+
+volInput.onchange=async()=>{
+
+let f=volInput.files[0]
+
+volumeData=await readExcel(f)
+
+volInfo.innerText="✓ "+f.name+"  ("+volumeData.length+" rows)"
+
+}
+
+mapInput.onchange=async()=>{
+
+let f=mapInput.files[0]
+
+mapData=await readExcel(f)
+
+mapInfo.innerText="✓ "+f.name+"  ("+mapData.length+" rules)"
+
+}
+
+addVol.oninput=()=>{
+
+let v=parseFloat(addVol.value||0)
+
+equiv.innerText="Equivalent: "+(v*10000).toLocaleString()+" packages"
+
+}
+
+addVol.oninput()
+
+async function run(){
+
+if(!volumeData.length||!mapData.length){
+
+alert("Upload both files")
+
+return
+
+}
+
+let map={}
+
+mapData.forEach(r=>{
+
+let zip=cleanZip(r["Zipcode"]||r["ZIP"]||r["邮编"])
+
+if(!zip)return
+
+map[zip]={
+
+territory:r["Territory"]||r["路区"],
+
+dsp:r["DSP"]
+
+}
+
+})
+
+let pivot={}
+
+let currentTotal=0
+
+volumeData.forEach(r=>{
+
+let zip=cleanZip(r["ZIP"]||r["邮编"])
+
+if(!zip)return
+
+let info=map[zip]
+
+if(!info)return
+
+let dsp=info.dsp
+
+let ter=info.territory
+
+if(!pivot[dsp])pivot[dsp]={}
+
+if(!pivot[dsp][ter])pivot[dsp][ter]={}
+
+if(!pivot[dsp][ter][zip])pivot[dsp][ter][zip]=0
+
+pivot[dsp][ter][zip]++
+
+currentTotal++
+
+})
+
+let add=parseFloat(addVol.value||0)*10000
+
+let multiplier=(currentTotal+add)/currentTotal
+
+let out=""
+
+Object.keys(pivot).forEach(dsp=>{
+
+let dspTotal=0
+
+Object.values(pivot[dsp]).forEach(t=>{
+
+Object.values(t).forEach(c=>dspTotal+=c)
+
+})
+
+out+=`${dsp}  ${Math.round(dspTotal*multiplier)}\n`
+
+Object.keys(pivot[dsp]).forEach(ter=>{
+
+let terTotal=0
+
+Object.values(pivot[dsp][ter]).forEach(c=>terTotal+=c)
+
+out+=`   ${ter}  ${Math.round(terTotal*multiplier)}\n`
+
+Object.keys(pivot[dsp][ter]).forEach(zip=>{
+
+let c=pivot[dsp][ter][zip]
+
+out+=`      ${zip}  ${Math.round(c*multiplier)}\n`
+
+})
+
+})
+
+out+="\n"
+
+})
+
+output.textContent=out
+
+}
+
+function copy(){
+
+navigator.clipboard.writeText(output.textContent)
+
+}
+
+</script>
+
+</body>
+</html>
