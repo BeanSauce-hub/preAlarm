@@ -62,7 +62,6 @@ padding:28px;
 text-align:center;
 cursor:pointer;
 transition:0.2s;
-position:relative;
 }
 
 .upload:hover{
@@ -95,6 +94,33 @@ border-radius:6px;
 width:120px;
 }
 
+.generate{
+margin-top:18px;
+background:#E6372A;
+border:none;
+padding:11px 18px;
+border-radius:8px;
+color:white;
+font-size:14px;
+font-weight:500;
+cursor:pointer;
+transition:all 0.15s ease;
+box-shadow:0 2px 6px rgba(0,0,0,0.4);
+}
+
+.generate:hover{
+background:#FF4D4F;
+transform:translateY(-1px);
+box-shadow:0 6px 16px rgba(0,0,0,0.5);
+}
+
+.generate:disabled{
+background:#555;
+cursor:not-allowed;
+box-shadow:none;
+transform:none;
+}
+
 .result{
 background:#0E0F12;
 border-radius:10px;
@@ -122,8 +148,6 @@ color:#f39c12;
 font-size:13px;
 margin-top:10px;
 }
-
-/* Drop overlay */
 
 .overlay{
 position:fixed;
@@ -162,7 +186,6 @@ Drop file to upload
 <div class="card">
 
 <div class="section">
-
 <div class="label">Current Volume File</div>
 
 <div id="volUpload" class="upload">
@@ -172,12 +195,9 @@ Drag file here or click to upload
 <input type="file" id="volInput" hidden>
 
 <div id="volInfo" class="info"></div>
-
 </div>
 
-
 <div class="section">
-
 <div class="label">ZIP Mapping File</div>
 
 <div id="mapUpload" class="upload">
@@ -187,9 +207,7 @@ Drag file here or click to upload
 <input type="file" id="mapInput" hidden>
 
 <div id="mapInfo" class="info"></div>
-
 </div>
-
 
 <div class="section">
 
@@ -199,10 +217,13 @@ Drag file here or click to upload
 
 <div id="equiv" class="info"></div>
 
-</div>
+<button class="generate" id="runBtn" disabled>
+Generate Forecast
+</button>
 
 </div>
 
+</div>
 
 <div class="card">
 
@@ -258,23 +279,41 @@ return String(z).substring(0,5)
 
 }
 
-/* click upload */
+function getZip(row){
+return cleanZip(
+row["ZIP"]||
+row["Zip"]||
+row["Zipcode"]||
+row["邮编"]
+)
+}
+
+function checkReady(){
+if(volumeData.length && mapData.length){
+runBtn.disabled=false
+}
+}
 
 volUpload.onclick=()=>volInput.click()
 mapUpload.onclick=()=>mapInput.click()
 
-/* drag overlay */
+/* Drag overlay */
 
-window.addEventListener("dragenter",()=>overlay.classList.add("show"))
+window.addEventListener("dragenter",()=>{
+overlay.classList.add("show")
+})
 
 window.addEventListener("dragleave",e=>{
-if(e.clientX===0&&e.clientY===0)
+if(e.clientX===0 && e.clientY===0){
+overlay.classList.remove("show")
+}
+})
+
+window.addEventListener("drop",()=>{
 overlay.classList.remove("show")
 })
 
-window.addEventListener("drop",()=>overlay.classList.remove("show"))
-
-/* drag zone */
+/* Drag zones */
 
 function setupDrop(zone,input,handler){
 
@@ -290,10 +329,11 @@ zone.classList.remove("drag")
 zone.addEventListener("drop",async e=>{
 
 e.preventDefault()
-
 zone.classList.remove("drag")
 
 let file=e.dataTransfer.files[0]
+
+if(!file)return
 
 input.files=e.dataTransfer.files
 
@@ -303,9 +343,17 @@ await handler(file)
 
 }
 
-/* volume upload */
+setupDrop(volUpload,volInput,handleVolume)
+setupDrop(mapUpload,mapInput,handleMap)
+
+/* Volume upload */
 
 async function handleVolume(file){
+
+if(!file.name.match(/\.(xlsx|xls|csv)$/i)){
+alert("Please upload Excel or CSV file")
+return
+}
 
 volumeData=await readExcel(file)
 
@@ -317,15 +365,20 @@ volInfo.innerHTML=
 "✓ Current Volume File Uploaded<br>"+
 count.toLocaleString()+" packages detected"
 
-updateForecast()
+checkReady()
 
 }
 
 volInput.onchange=()=>handleVolume(volInput.files[0])
 
-/* mapping upload */
+/* Mapping upload */
 
 async function handleMap(file){
+
+if(!file.name.match(/\.(xlsx|xls|csv)$/i)){
+alert("Please upload Excel or CSV file")
+return
+}
 
 mapData=await readExcel(file)
 
@@ -337,45 +390,50 @@ mapInfo.innerHTML=
 "✓ ZIP Mapping Uploaded<br>"+
 rules.toLocaleString()+" ZIP rules loaded"
 
-updateForecast()
+checkReady()
 
 }
 
 mapInput.onchange=()=>handleMap(mapInput.files[0])
 
-setupDrop(volUpload,volInput,handleVolume)
-setupDrop(mapUpload,mapInput,handleMap)
-
-/* volume input */
-
 addVol.oninput=()=>{
 
 let v=parseFloat(addVol.value||0)
 
-equiv.innerText="Equivalent: "+(v*10000).toLocaleString()+" packages"
-
-updateForecast()
+equiv.innerText=
+"Equivalent: "+(v*10000).toLocaleString()+" packages"
 
 }
 
 addVol.oninput()
 
-function updateForecast(){
+runBtn.onclick=()=>{
 
-if(!volumeData.length||!mapData.length)return
+runBtn.innerText="Generating..."
+
+setTimeout(()=>{
+
+updateForecast()
+
+runBtn.innerText="Generate Forecast"
+
+},50)
+
+}
+
+function updateForecast(){
 
 let map={}
 
 mapData.forEach(r=>{
 
-let zip=cleanZip(r["Zipcode"]||r["ZIP"]||r["邮编"])
+let zip=getZip(r)
 
 if(!zip)return
 
 map[zip]={
 
 territory:r["Territory"]||r["路区"],
-
 dsp:r["DSP"]
 
 }
@@ -388,7 +446,7 @@ let unmapped=0
 
 volumeData.forEach(r=>{
 
-let zip=cleanZip(r["ZIP"]||r["邮编"])
+let zip=getZip(r)
 
 if(!zip)return
 
@@ -411,6 +469,12 @@ pivot[dsp][ter][zip]++
 currentTotal++
 
 })
+
+if(currentTotal===0){
+output.textContent="No valid packages detected"
+warn.innerText=""
+return
+}
 
 let add=parseFloat(addVol.value||0)*10000
 let multiplier=(currentTotal+add)/currentTotal
@@ -454,8 +518,6 @@ output.textContent=out
 warn.innerText=unmapped?("⚠ "+unmapped+" ZIP codes not mapped"):""
 
 }
-
-/* copy */
 
 function copy(){
 
