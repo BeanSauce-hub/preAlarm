@@ -1,536 +1,651 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="utf-8">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <title>Route Forecast Tool</title>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
 <style>
-
+:root{
+  --bg:#0E0F12;
+  --fg:#E7E9EE;
+  --muted:#9AA1AD;
+  --card:#14161C;
+  --border:rgba(255,255,255,.10);
+  --border2:rgba(255,255,255,.07);
+  --btn:#E6372A;
+  --btn2:#FF4D4F;
+  --ok:#2ecc71;
+}
+*{box-sizing:border-box}
 body{
-background:#0E0F12;
-color:#E7E9EE;
-font-family:system-ui,-apple-system,Segoe UI,Roboto;
-margin:0;
-padding:40px;
+  margin:0; padding:40px;
+  background:var(--bg); color:var(--fg);
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
 }
-
-.container{
-max-width:1200px;
-margin:auto;
-}
-
-.header{
-font-size:28px;
-font-weight:600;
-}
-
-.sub{
-color:#9AA1AD;
-margin-bottom:30px;
-}
-
-.layout{
-display:grid;
-grid-template-columns:420px 1fr;
-gap:28px;
-}
+.container{max-width:1200px;margin:auto}
+.header{font-size:28px;font-weight:650;letter-spacing:.2px}
+.sub{color:var(--muted);margin:6px 0 26px}
+.layout{display:grid;grid-template-columns:420px 1fr;gap:28px;align-items:start}
 
 .card{
-background:#14161C;
-border:1px solid rgba(255,255,255,0.08);
-border-radius:12px;
-padding:22px;
-box-shadow:0 2px 10px rgba(0,0,0,0.4);
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:22px;
+  box-shadow:0 2px 12px rgba(0,0,0,.35);
 }
-
-.section{
-margin-bottom:20px;
-}
-
-.label{
-font-size:13px;
-color:#9AA1AD;
-margin-bottom:6px;
-}
+.section{margin-bottom:18px}
+.label{font-size:13px;color:var(--muted);margin-bottom:8px}
 
 .upload{
-border:1px dashed rgba(255,255,255,0.15);
-border-radius:10px;
-padding:28px;
-text-align:center;
-cursor:pointer;
-transition:0.2s;
+  border:1px dashed rgba(255,255,255,.16);
+  border-radius:12px;
+  padding:26px;
+  text-align:center;
+  cursor:pointer;
+  transition:.18s;
+  user-select:none;
 }
+.upload:hover{border-color:rgba(255,255,255,.32)}
+.upload.drag{border-color:var(--btn); background:rgba(230,55,42,.08)}
+.upload.success{border-color:var(--ok); background:rgba(46,204,113,.06)}
+.info{font-size:13px;color:var(--muted);margin-top:8px;line-height:1.35}
 
-.upload:hover{
-border-color:rgba(255,255,255,0.35);
+input[type="text"]{
+  background:var(--bg);
+  border:1px solid rgba(255,255,255,.16);
+  color:var(--fg);
+  padding:9px 10px;
+  border-radius:10px;
+  width:160px;
+  outline:none;
 }
+input[type="text"]:focus{border-color:rgba(255,255,255,.32)}
 
-.upload.drag{
-border-color:#E6372A;
-background:rgba(230,55,42,0.08);
+.stationBar{display:flex;gap:10px;flex-wrap:wrap}
+.stationBtn{
+  padding:7px 12px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(0,0,0,.10);
+  color:var(--fg);
+  font-size:13px;
+  cursor:pointer;
+  transition:.12s;
+  user-select:none;
 }
-
-.upload.success{
-border-color:#2ecc71;
-background:rgba(46,204,113,0.05);
+.stationBtn:hover{border-color:rgba(255,255,255,.28)}
+.stationBtn.active{
+  background:rgba(230,55,42,.95);
+  border-color:rgba(230,55,42,1);
 }
-
-.info{
-font-size:13px;
-color:#9AA1AD;
-margin-top:8px;
-line-height:1.4;
-}
-
-input{
-background:#0E0F12;
-border:1px solid rgba(255,255,255,0.15);
-color:#E7E9EE;
-padding:8px;
-border-radius:6px;
-width:120px;
-}
+.stationBtn:active{transform:scale(.98)}
 
 .generate{
-margin-top:18px;
-background:#E6372A;
-border:none;
-padding:11px 18px;
-border-radius:8px;
-color:white;
-font-size:14px;
-font-weight:500;
-cursor:pointer;
-transition:all 0.15s ease;
-box-shadow:0 2px 6px rgba(0,0,0,0.4);
+  margin-top:14px;
+  background:var(--btn);
+  border:none;
+  padding:11px 16px;
+  border-radius:12px;
+  color:white;
+  font-size:14px;
+  font-weight:650;
+  cursor:pointer;
+  transition:.15s;
+  box-shadow:0 2px 8px rgba(0,0,0,.35);
 }
-
-.generate:hover{
-background:#FF4D4F;
-transform:translateY(-1px);
-box-shadow:0 6px 16px rgba(0,0,0,0.5);
-}
-
+.generate:hover{background:var(--btn2); transform:translateY(-1px); box-shadow:0 10px 22px rgba(0,0,0,.45)}
 .generate:disabled{
-background:#555;
-cursor:not-allowed;
-box-shadow:none;
-transform:none;
+  background:#4b4f57;
+  cursor:not-allowed;
+  transform:none;
+  box-shadow:none;
 }
 
-.result{
-background:#0E0F12;
-border-radius:10px;
-padding:18px;
-font-family:ui-monospace,Menlo,monospace;
-line-height:1.6;
-max-height:600px;
-overflow:auto;
-white-space:pre;
+.tableWrap{
+  margin-top:10px;
+  border:1px solid var(--border2);
+  border-radius:12px;
+  overflow:auto;
+  max-height:560px;
+  background:rgba(0,0,0,.10);
 }
+table{width:100%; border-collapse:collapse; min-width:620px; font-size:13px}
+thead th{
+  position:sticky; top:0; z-index:2;
+  background:var(--card);
+  color:var(--muted);
+  text-align:left;
+  font-weight:650;
+  padding:10px 12px;
+  border-bottom:1px solid var(--border2);
+}
+tbody td{
+  padding:9px 12px;
+  border-bottom:1px solid rgba(255,255,255,.05);
+  white-space:nowrap;
+}
+td.count{text-align:right; font-variant-numeric:tabular-nums}
+tr.rowDSP td{font-weight:750; font-size:14px}
+tr.rowRoute td{color:#d8dbe2}
+tr.rowZIP td{color:#b6bcc8}
+td.ind1{padding-left:28px}
+td.ind2{padding-left:52px}
 
-.copy{
-margin-top:10px;
-font-size:13px;
-cursor:pointer;
-color:#9AA1AD;
-}
+.toolsRow{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px}
+.warn{color:#f39c12;font-size:13px}
+.mini{font-size:12px;color:#8f97a6;margin-top:10px;line-height:1.35}
 
-.copy:hover{
-color:white;
+.copyBtn{
+  display:inline-flex; align-items:center; gap:8px;
+  padding:8px 12px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(0,0,0,.12);
+  color:var(--fg);
+  cursor:pointer;
+  font-size:13px;
+  transition:.15s;
 }
-
-.warn{
-color:#f39c12;
-font-size:13px;
-margin-top:10px;
+.copyBtn:hover{border-color:rgba(255,255,255,.28)}
+.copyBtn.success{
+  background:rgba(46,204,113,.18);
+  border-color:var(--ok);
+  color:#ddffe9;
 }
+.tick{width:14px;height:14px;display:none}
+.copyBtn.success .tick{display:inline-block;animation:pop .22s ease-out}
+@keyframes pop{0%{transform:scale(.6);opacity:.35}100%{transform:scale(1);opacity:1}}
 
 .overlay{
-position:fixed;
-inset:0;
-background:rgba(0,0,0,0.65);
-display:flex;
-align-items:center;
-justify-content:center;
-font-size:28px;
-font-weight:600;
-pointer-events:none;
-opacity:0;
-transition:0.15s;
+  position:fixed; inset:0;
+  background:rgba(0,0,0,.65);
+  display:flex; align-items:center; justify-content:center;
+  font-size:26px; font-weight:750;
+  pointer-events:none;
+  opacity:0;
+  transition:.15s;
 }
-
-.overlay.show{
-opacity:1;
-}
-
+.overlay.show{opacity:1}
 </style>
 </head>
 
 <body>
-
-<div class="overlay" id="overlay">
-Drop file to upload
-</div>
+<div class="overlay" id="overlay">Drop file to upload</div>
 
 <div class="container">
+  <div class="header">Route Forecast Tool</div>
+  <div class="sub">Generate Excel-style Pivot from Current Volume (Ops-ready)</div>
 
-<div class="header">Route Forecast Tool</div>
-<div class="sub">Predict Route Distribution from Current Volume</div>
+  <div class="layout">
 
-<div class="layout">
+    <!-- LEFT -->
+    <div class="card">
 
-<div class="card">
+      <div class="section">
+        <div class="label">Current Volume File</div>
+        <div id="volUpload" class="upload">Drag file here or click to upload</div>
+        <input type="file" id="volInput" hidden />
+        <div id="volInfo" class="info"></div>
+      </div>
 
-<div class="section">
-<div class="label">Current Volume File</div>
+      <div class="section">
+        <div class="label">ZIP Mapping File</div>
+        <div id="mapUpload" class="upload">Drag file here or click to upload</div>
+        <input type="file" id="mapInput" hidden />
+        <div id="mapInfo" class="info"></div>
+      </div>
 
-<div id="volUpload" class="upload">
-Drag file here or click to upload
-</div>
+      <div class="section">
+        <div class="label">Station Filter</div>
+        <div class="stationBar" id="stationBar"></div>
+        <div class="info">Only these stations are supported: MIA / SRQ / FTM / WPB.</div>
+      </div>
 
-<input type="file" id="volInput" hidden>
+      <div class="section">
+        <div class="label">Add Volume (10k units)</div>
+        <input id="addVol" type="text" value="1.0" />
+        <div id="equiv" class="info"></div>
+        <button class="generate" id="runBtn" disabled>Generate</button>
+        <div id="diag" class="mini"></div>
+      </div>
 
-<div id="volInfo" class="info"></div>
-</div>
+    </div>
 
-<div class="section">
-<div class="label">ZIP Mapping File</div>
+    <!-- RIGHT -->
+    <div class="card">
+      <div class="label">Pivot Result (Excel Style)</div>
 
-<div id="mapUpload" class="upload">
-Drag file here or click to upload
-</div>
+      <div class="tableWrap">
+        <table id="pivotTable">
+          <thead>
+            <tr>
+              <th style="width:30%;">DSP</th>
+              <th style="width:38%;">Route</th>
+              <th style="width:16%;">ZIP</th>
+              <th style="width:16%;text-align:right;">Count</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
 
-<input type="file" id="mapInput" hidden>
+      <div class="toolsRow">
+        <div id="warn" class="warn"></div>
+        <button id="copyBtn" class="copyBtn" disabled>
+          <svg class="tick" viewBox="0 0 24 24" fill="none">
+            <path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span id="copyText">Copy</span>
+        </button>
+      </div>
+    </div>
 
-<div id="mapInfo" class="info"></div>
-</div>
-
-<div class="section">
-
-<div class="label">Add Volume (10k units)</div>
-
-<input id="addVol" value="1.0">
-
-<div id="equiv" class="info"></div>
-
-<button class="generate" id="runBtn" disabled>
-Generate Forecast
-</button>
-
-</div>
-
-</div>
-
-<div class="card">
-
-<div class="label">Forecast Result</div>
-
-<div id="output" class="result"></div>
-
-<div id="warn" class="warn"></div>
-
-<div class="copy" onclick="copy()">Copy Result</div>
-
-</div>
-
-</div>
+  </div>
 </div>
 
 <script>
+/* ---------------- state ---------------- */
+let volumeData = []
+let mapData = []
+let zipMap = null // { zip: { dsp, route } }
+let mapKeys = { zip:null, dsp:null, route:null }
+const ALLOWED_STATIONS = ["MIA","SRQ","FTM","WPB"]
+let stationSelected = new Set() // default none
+let lastPivot = null // store last pivot for copy
 
-let volumeData=[]
-let mapData=[]
-
-function readExcel(file){
-
-return new Promise(resolve=>{
-
-let reader=new FileReader()
-
-reader.onload=e=>{
-
-let data=new Uint8Array(e.target.result)
-
-let wb=XLSX.read(data,{type:"array"})
-
-let sheet=wb.Sheets[wb.SheetNames[0]]
-
-let json=XLSX.utils.sheet_to_json(sheet)
-
-resolve(json)
-
+/* ---------------- utils ---------------- */
+function normKey(k){
+  return String(k||"").trim().toLowerCase().replace(/[\s_\-\/\\\.\(\)\[\]\{\}:，,]+/g,"")
 }
-
-reader.readAsArrayBuffer(file)
-
-})
-
-}
-
 function cleanZip(z){
-
-if(!z)return null
-
-return String(z).substring(0,5)
-
+  if(z===null || z===undefined) return null
+  let s = String(z).trim()
+  if(!s) return null
+  if(s[0]==="'") s = s.slice(1)
+  const m = s.match(/\d{5}/) // supports 33065-1234
+  return m ? m[0] : null
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))
+}
+function parseAddVol(){
+  let v = parseFloat(String(addVol.value||"").trim())
+  if(Number.isNaN(v) || !Number.isFinite(v)) v = 0
+  return v
 }
 
-function getZip(row){
-return cleanZip(
-row["ZIP"]||
-row["Zip"]||
-row["Zipcode"]||
-row["邮编"]
-)
+/* read excel */
+function readExcel(file){
+  return new Promise(resolve=>{
+    const reader = new FileReader()
+    reader.onload = e=>{
+      const data = new Uint8Array(e.target.result)
+      const wb = XLSX.read(data,{type:"array"})
+      const sheet = wb.Sheets[wb.SheetNames[0]]
+      const json = XLSX.utils.sheet_to_json(sheet,{defval:""})
+      resolve(json)
+    }
+    reader.readAsArrayBuffer(file)
+  })
+}
+
+/* mapping column detection */
+function detectMapKeys(rows){
+  if(!rows || !rows.length) return {zip:null,dsp:null,route:null}
+  const keys = Object.keys(rows[0]||{})
+  let zip=null, dsp=null, route=null
+
+  for(const k of keys){
+    const nk = normKey(k)
+    if(!zip && (nk==="zip"||nk==="zipcode"||nk.includes("zip")||nk.includes("邮编"))) zip = k
+    if(!dsp && (nk==="dsp"||nk.includes("dsp"))) dsp = k
+    if(!route && (nk==="territory"||nk.includes("territory")||nk==="路区"||nk.includes("路区"))) route = k
+  }
+  return {zip,dsp,route}
+}
+
+function buildZipMap(){
+  zipMap = {}
+  mapKeys = detectMapKeys(mapData)
+
+  for(const r of mapData){
+    const z = cleanZip(r[mapKeys.zip] ?? r["ZIP"] ?? r["Zipcode"] ?? r["邮编"])
+    if(!z) continue
+    const dsp = String(r[mapKeys.dsp] ?? r["DSP"] ?? "").trim()
+    const route = String(r[mapKeys.route] ?? r["Territory"] ?? r["路区"] ?? "").trim()
+    zipMap[z] = { dsp, route }
+  }
+}
+
+/* volume helpers */
+function getZipFromVolume(row){
+  let z = cleanZip(row["ZIP"]||row["Zip"]||row["Zipcode"]||row["邮编"])
+  if(z) return z
+  for(const k of Object.keys(row)){
+    const nk = normKey(k)
+    if(nk.includes("zip") || nk.includes("邮编")){
+      z = cleanZip(row[k])
+      if(z) return z
+    }
+  }
+  return null
+}
+function getStation(row){
+  // target: "目的站点" like FTM01 / WPB01
+  const raw =
+    row["目的站点"] ||
+    row["Destination Station"] ||
+    row["目的站"] ||
+    row["Station"] ||
+    row["目的站点 "] ||
+    ""
+  const s = String(raw).trim()
+  if(!s) return null
+  return s.substring(0,3).toUpperCase()
+}
+
+/* ---------------- UI wiring ---------------- */
+function setupStationBar(){
+  stationBar.innerHTML = ""
+  stationSelected = new Set() // default none
+
+  for(const s of ALLOWED_STATIONS){
+    const btn = document.createElement("div")
+    btn.className = "stationBtn"
+    btn.textContent = s
+    btn.onclick = ()=>{
+      btn.classList.toggle("active")
+      if(btn.classList.contains("active")) stationSelected.add(s)
+      else stationSelected.delete(s)
+      checkReady()
+    }
+    stationBar.appendChild(btn)
+  }
 }
 
 function checkReady(){
-if(volumeData.length && mapData.length){
-runBtn.disabled=false
+  const ok = volumeData.length && mapData.length && stationSelected.size>0
+  runBtn.disabled = !ok
+  // copy only enabled after a successful generate
+  // (copyBtn will be enabled in generate() if pivot has rows)
 }
-}
 
-volUpload.onclick=()=>volInput.click()
-mapUpload.onclick=()=>mapInput.click()
+/* upload click */
+volUpload.onclick = ()=>volInput.click()
+mapUpload.onclick = ()=>mapInput.click()
 
-/* Drag overlay */
+/* drag overlay: prevent browser opening file */
+window.addEventListener("dragover", e=>{ e.preventDefault() })
+window.addEventListener("drop", e=>{ e.preventDefault() })
 
-window.addEventListener("dragenter",()=>{
-overlay.classList.add("show")
+window.addEventListener("dragenter", ()=>overlay.classList.add("show"))
+window.addEventListener("dragleave", e=>{
+  if(e.clientX===0 && e.clientY===0) overlay.classList.remove("show")
 })
-
-window.addEventListener("dragleave",e=>{
-if(e.clientX===0 && e.clientY===0){
-overlay.classList.remove("show")
-}
-})
-
-window.addEventListener("drop",()=>{
-overlay.classList.remove("show")
-})
-
-/* Drag zones */
+window.addEventListener("drop", ()=>overlay.classList.remove("show"))
 
 function setupDrop(zone,input,handler){
-
-zone.addEventListener("dragover",e=>{
-e.preventDefault()
-zone.classList.add("drag")
-})
-
-zone.addEventListener("dragleave",()=>{
-zone.classList.remove("drag")
-})
-
-zone.addEventListener("drop",async e=>{
-
-e.preventDefault()
-zone.classList.remove("drag")
-
-let file=e.dataTransfer.files[0]
-
-if(!file)return
-
-input.files=e.dataTransfer.files
-
-await handler(file)
-
-})
-
+  zone.addEventListener("dragover", e=>{
+    e.preventDefault()
+    zone.classList.add("drag")
+  })
+  zone.addEventListener("dragleave", ()=>{
+    zone.classList.remove("drag")
+  })
+  zone.addEventListener("drop", async e=>{
+    e.preventDefault()
+    zone.classList.remove("drag")
+    const file = e.dataTransfer.files && e.dataTransfer.files[0]
+    if(!file) return
+    input.files = e.dataTransfer.files
+    await handler(file)
+  })
 }
-
-setupDrop(volUpload,volInput,handleVolume)
-setupDrop(mapUpload,mapInput,handleMap)
-
-/* Volume upload */
+setupDrop(volUpload, volInput, handleVolume)
+setupDrop(mapUpload, mapInput, handleMap)
 
 async function handleVolume(file){
+  if(!file || !file.name.match(/\.(xlsx|xls|csv)$/i)){
+    alert("Please upload Excel or CSV file")
+    return
+  }
+  volumeData = await readExcel(file)
+  volUpload.classList.add("success")
+  volInfo.innerHTML = "✓ Current Volume File Uploaded<br>"+volumeData.length.toLocaleString()+" packages detected"
 
-if(!file.name.match(/\.(xlsx|xls|csv)$/i)){
-alert("Please upload Excel or CSV file")
-return
+  // DO NOT auto-generate pivot
+  lastPivot = null
+  clearTable()
+
+  checkReady()
 }
-
-volumeData=await readExcel(file)
-
-let count=volumeData.length
-
-volUpload.classList.add("success")
-
-volInfo.innerHTML=
-"✓ Current Volume File Uploaded<br>"+
-count.toLocaleString()+" packages detected"
-
-checkReady()
-
-}
-
-volInput.onchange=()=>handleVolume(volInput.files[0])
-
-/* Mapping upload */
 
 async function handleMap(file){
+  if(!file || !file.name.match(/\.(xlsx|xls|csv)$/i)){
+    alert("Please upload Excel or CSV file")
+    return
+  }
+  mapData = await readExcel(file)
+  mapUpload.classList.add("success")
+  mapInfo.innerHTML = "✓ ZIP Mapping Uploaded<br>"+mapData.length.toLocaleString()+" rules loaded"
 
-if(!file.name.match(/\.(xlsx|xls|csv)$/i)){
-alert("Please upload Excel or CSV file")
-return
+  buildZipMap()
+
+  // DO NOT auto-generate pivot
+  lastPivot = null
+  clearTable()
+
+  checkReady()
 }
 
-mapData=await readExcel(file)
+volInput.onchange = ()=>handleVolume(volInput.files[0])
+mapInput.onchange = ()=>handleMap(mapInput.files[0])
 
-let rules=mapData.length
-
-mapUpload.classList.add("success")
-
-mapInfo.innerHTML=
-"✓ ZIP Mapping Uploaded<br>"+
-rules.toLocaleString()+" ZIP rules loaded"
-
-checkReady()
-
+addVol.oninput = ()=>{
+  const v = parseAddVol()
+  equiv.innerText = "Equivalent: "+(v*10000).toLocaleString()+" packages"
 }
-
-mapInput.onchange=()=>handleMap(mapInput.files[0])
-
-addVol.oninput=()=>{
-
-let v=parseFloat(addVol.value||0)
-
-equiv.innerText=
-"Equivalent: "+(v*10000).toLocaleString()+" packages"
-
-}
-
 addVol.oninput()
 
-runBtn.onclick=()=>{
-
-runBtn.innerText="Generating..."
-
-setTimeout(()=>{
-
-updateForecast()
-
-runBtn.innerText="Generate Forecast"
-
-},50)
-
+/* ---------------- Pivot core ---------------- */
+function clearTable(){
+  pivotTable.querySelector("tbody").innerHTML = ""
+  warn.textContent = ""
+  diag.textContent = ""
+  copyBtn.disabled = true
+  copyBtn.classList.remove("success")
+  copyText.textContent = "Copy"
 }
 
-function updateForecast(){
+/* Build pivot: dsp -> route -> zip -> count */
+function buildPivot(){
+  if(!zipMap){
+    return { pivot:{}, total:0, zipMissing:0, notInMap:0, missingFields:0 }
+  }
 
-let map={}
+  const pivot = {}
+  let total=0, zipMissing=0, notInMap=0, missingFields=0
 
-mapData.forEach(r=>{
+  for(const r of volumeData){
+    const st = getStation(r)
+    if(!st || !stationSelected.has(st)) continue
 
-let zip=getZip(r)
+    const zip = getZipFromVolume(r)
+    if(!zip){ zipMissing++; continue }
 
-if(!zip)return
+    const info = zipMap[zip]
+    if(!info){ notInMap++; continue }
+    if(!info.dsp || !info.route){ missingFields++; continue }
 
-map[zip]={
+    const dsp = info.dsp
+    const route = info.route
 
-territory:r["Territory"]||r["路区"],
-dsp:r["DSP"]
+    if(!pivot[dsp]) pivot[dsp] = {}
+    if(!pivot[dsp][route]) pivot[dsp][route] = {}
+    if(!pivot[dsp][route][zip]) pivot[dsp][route][zip] = 0
+    pivot[dsp][route][zip]++
+    total++
+  }
 
+  return { pivot, total, zipMissing, notInMap, missingFields }
 }
 
-})
+/* Render Excel-style hierarchy (DSP total row, Route total row, ZIP rows) */
+function renderPivot(pivotObj, multiplier){
+  const tbody = pivotTable.querySelector("tbody")
+  tbody.innerHTML = ""
 
-let pivot={}
-let currentTotal=0
-let unmapped=0
+  const dsps = Object.keys(pivotObj).sort((a,b)=>a.localeCompare(b))
+  for(const dsp of dsps){
+    // dsp total
+    let dspTotal = 0
+    for(const route of Object.keys(pivotObj[dsp])){
+      for(const c of Object.values(pivotObj[dsp][route])) dspTotal += c
+    }
+    addRowDSP(dsp, Math.round(dspTotal*multiplier))
 
-volumeData.forEach(r=>{
+    const routes = Object.keys(pivotObj[dsp]).sort((a,b)=>a.localeCompare(b))
+    for(const route of routes){
+      let routeTotal = 0
+      for(const c of Object.values(pivotObj[dsp][route])) routeTotal += c
+      addRowRoute(route, Math.round(routeTotal*multiplier))
 
-let zip=getZip(r)
+      const zips = Object.keys(pivotObj[dsp][route]).sort()
+      for(const zip of zips){
+        const c = pivotObj[dsp][route][zip]
+        addRowZIP(zip, Math.round(c*multiplier))
+      }
+    }
+  }
 
-if(!zip)return
-
-let info=map[zip]
-
-if(!info){
-unmapped++
-return
+  function addRowDSP(dsp,count){
+    const tr=document.createElement("tr")
+    tr.className="rowDSP"
+    tr.innerHTML =
+      `<td>${escapeHtml(dsp)}</td>`+
+      `<td></td><td></td>`+
+      `<td class="count">${count.toLocaleString()}</td>`
+    tbody.appendChild(tr)
+  }
+  function addRowRoute(route,count){
+    const tr=document.createElement("tr")
+    tr.className="rowRoute"
+    tr.innerHTML =
+      `<td></td>`+
+      `<td class="ind1">${escapeHtml(route)}</td>`+
+      `<td></td>`+
+      `<td class="count">${count.toLocaleString()}</td>`
+    tbody.appendChild(tr)
+  }
+  function addRowZIP(zip,count){
+    const tr=document.createElement("tr")
+    tr.className="rowZIP"
+    tr.innerHTML =
+      `<td></td><td></td>`+
+      `<td class="ind2">${escapeHtml(zip)}</td>`+
+      `<td class="count">${count.toLocaleString()}</td>`
+    tbody.appendChild(tr)
+  }
 }
 
-let dsp=info.dsp
-let ter=info.territory
+/* Copy EXACT Excel hierarchy style:
+   DSP [A] | Route [B] | ZIP [C] | Count [D]
+   DSP row:  A=dsp, D=total
+   Route row: B=route, D=total
+   ZIP row: C=zip, D=count
+*/
+function buildExcelHierarchyTSV(pivotObj, multiplier){
+  const lines = []
 
-if(!pivot[dsp])pivot[dsp]={}
-if(!pivot[dsp][ter])pivot[dsp][ter]={}
-if(!pivot[dsp][ter][zip])pivot[dsp][ter][zip]=0
+  const dsps = Object.keys(pivotObj).sort((a,b)=>a.localeCompare(b))
+  for(const dsp of dsps){
+    let dspTotal = 0
+    for(const route of Object.keys(pivotObj[dsp])){
+      for(const c of Object.values(pivotObj[dsp][route])) dspTotal += c
+    }
+    lines.push(`${dsp}\t\t\t${Math.round(dspTotal*multiplier)}`)
 
-pivot[dsp][ter][zip]++
+    const routes = Object.keys(pivotObj[dsp]).sort((a,b)=>a.localeCompare(b))
+    for(const route of routes){
+      let routeTotal = 0
+      for(const c of Object.values(pivotObj[dsp][route])) routeTotal += c
+      lines.push(`\t${route}\t\t${Math.round(routeTotal*multiplier)}`)
 
-currentTotal++
+      const zips = Object.keys(pivotObj[dsp][route]).sort()
+      for(const zip of zips){
+        const c = pivotObj[dsp][route][zip]
+        lines.push(`\t\t${zip}\t${Math.round(c*multiplier)}`)
+      }
+    }
+  }
 
-})
-
-if(currentTotal===0){
-output.textContent="No valid packages detected"
-warn.innerText=""
-return
+  return lines.join("\n")
 }
 
-let add=parseFloat(addVol.value||0)*10000
-let multiplier=(currentTotal+add)/currentTotal
+/* ---------------- Generate ---------------- */
 
-let out=""
+runBtn.onclick = () => {
 
-Object.keys(pivot).forEach(dsp=>{
+  runBtn.disabled = true
+  const oldText = runBtn.textContent
+  runBtn.textContent = "Generating..."
 
-let dspTotal=0
+  setTimeout(()=>{
 
-Object.values(pivot[dsp]).forEach(t=>{
-Object.values(t).forEach(c=>dspTotal+=c)
-})
+    const { pivot, total, zipMissing, notInMap, missingFields } = buildPivot()
 
-out+=dsp.padEnd(25)+" "+Math.round(dspTotal*multiplier)+"\n"
+    if(total===0){
+      clearTable()
+      warn.textContent = "No valid packages detected (check ZIP & mapping columns)."
+      runBtn.textContent = oldText
+      checkReady()
+      return
+    }
 
-Object.keys(pivot[dsp]).forEach(ter=>{
+    // multiplier for forecast
+    const add = parseAddVol()*10000
+    const multiplier = (total + add) / total
 
-let terTotal=0
+    // store for copy
+    lastPivot = { pivot, multiplier }
 
-Object.values(pivot[dsp][ter]).forEach(c=>terTotal+=c)
+    renderPivot(pivot, multiplier)
 
-out+="   "+ter.padEnd(22)+" "+Math.round(terTotal*multiplier)+"\n"
+    // enable copy
+    copyBtn.disabled = false
 
-Object.keys(pivot[dsp][ter]).forEach(zip=>{
+    warn.textContent = (notInMap || missingFields)
+      ? `⚠ Unmapped: ${notInMap.toLocaleString()} (ZIP not in mapping) + ${missingFields.toLocaleString()} (mapping missing DSP/Route)`
+      : ""
 
-let c=pivot[dsp][ter][zip]
+    runBtn.textContent = oldText
+    checkReady()
 
-out+="      "+zip.padEnd(18)+" "+Math.round(c*multiplier)+"\n"
-
-})
-
-})
-
-out+="\n"
-
-})
-
-output.textContent=out
-
-warn.innerText=unmapped?("⚠ "+unmapped+" ZIP codes not mapped"):""
-
+  },40)
 }
 
-function copy(){
+/* ---------------- Copy ---------------- */
+copyBtn.onclick = ()=>{
+  if(!lastPivot){ return }
+  const text = buildExcelHierarchyTSV(lastPivot.pivot, lastPivot.multiplier)
 
-navigator.clipboard.writeText(output.textContent)
+  navigator.clipboard.writeText(text)
 
-let btn=document.querySelector(".copy")
-
-btn.innerText="Copied ✓"
-
-setTimeout(()=>btn.innerText="Copy Result",1500)
-
+  copyBtn.classList.add("success")
+  copyText.textContent = "Copied"
+  setTimeout(()=>{
+    copyBtn.classList.remove("success")
+    copyText.textContent = "Copy"
+  }, 1300)
 }
 
+/* init */
+setupStationBar()
+checkReady()
 </script>
 
 </body>
