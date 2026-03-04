@@ -23,13 +23,18 @@ margin:auto;
 .header{
 font-size:28px;
 font-weight:600;
+margin-bottom:4px;
+}
+
+.sub{
+color:#9AA1AD;
 margin-bottom:30px;
 }
 
 .layout{
 display:grid;
 grid-template-columns:420px 1fr;
-gap:30px;
+gap:28px;
 }
 
 .card{
@@ -37,31 +42,42 @@ background:#14161C;
 border:1px solid rgba(255,255,255,0.08);
 border-radius:12px;
 padding:22px;
+box-shadow:0 2px 10px rgba(0,0,0,0.4);
 }
 
-.section-title{
+.section{
+margin-bottom:20px;
+}
+
+.label{
 font-size:13px;
 color:#9AA1AD;
-margin-bottom:8px;
+margin-bottom:6px;
 }
 
 .upload{
 border:1px dashed rgba(255,255,255,0.15);
 border-radius:10px;
-padding:18px;
+padding:20px;
 text-align:center;
 cursor:pointer;
-margin-bottom:12px;
+transition:0.2s;
 }
 
 .upload:hover{
-border-color:rgba(255,255,255,0.3);
+border-color:rgba(255,255,255,0.35);
 }
 
-.fileinfo{
+.upload.success{
+border-color:#2ecc71;
+background:rgba(46,204,113,0.05);
+}
+
+.info{
 font-size:13px;
 color:#9AA1AD;
-margin-bottom:12px;
+margin-top:8px;
+line-height:1.4;
 }
 
 input{
@@ -74,7 +90,7 @@ width:120px;
 }
 
 .button{
-margin-top:20px;
+margin-top:18px;
 background:#E6372A;
 border:none;
 padding:10px 16px;
@@ -90,11 +106,12 @@ background:#FF4D4F;
 .result{
 background:#0E0F12;
 border-radius:10px;
-padding:20px;
-font-family:ui-monospace,Menlo;
-white-space:pre;
+padding:18px;
+font-family:ui-monospace,Menlo,monospace;
+line-height:1.6;
 max-height:600px;
 overflow:auto;
+white-space:pre;
 }
 
 .copy{
@@ -108,6 +125,12 @@ color:#9AA1AD;
 color:white;
 }
 
+.warn{
+color:#f39c12;
+font-size:13px;
+margin-top:10px;
+}
+
 </style>
 </head>
 
@@ -115,59 +138,59 @@ color:white;
 
 <div class="container">
 
-<div class="header">
-Route Forecast Tool
-</div>
+<div class="header">Route Forecast Tool</div>
+<div class="sub">Predict Route Distribution from Current Volume</div>
 
 <div class="layout">
 
+<!-- INPUT PANEL -->
+
 <div class="card">
 
-<div class="section-title">Current Volume File</div>
-
-<div class="upload" onclick="volInput.click()">
-Drag or Upload File
+<div class="section">
+<div class="label">Current Volume File</div>
+<div id="volUpload" class="upload">
+Drag file here or click to upload
 </div>
-
 <input type="file" id="volInput" hidden>
-
-<div id="volInfo" class="fileinfo"></div>
-
-
-<div class="section-title">ZIP Mapping File</div>
-
-<div class="upload" onclick="mapInput.click()">
-Drag or Upload File
+<div id="volInfo" class="info"></div>
 </div>
 
+<div class="section">
+<div class="label">ZIP Mapping File</div>
+<div id="mapUpload" class="upload">
+Drag file here or click to upload
+</div>
 <input type="file" id="mapInput" hidden>
+<div id="mapInfo" class="info"></div>
+</div>
 
-<div id="mapInfo" class="fileinfo"></div>
-
-
-<div class="section-title">Add Volume (10k units)</div>
-
+<div class="section">
+<div class="label">Add Volume (10k units)</div>
 <input id="addVol" value="1.0">
-
-<div class="fileinfo" id="equiv"></div>
+<div id="equiv" class="info"></div>
+</div>
 
 <button class="button" onclick="run()">Generate Forecast</button>
 
 </div>
 
 
+<!-- RESULT PANEL -->
+
 <div class="card">
 
-<div class="section-title">Forecast Result</div>
+<div class="label">Forecast Result</div>
 
-<div class="result" id="output"></div>
+<div id="output" class="result"></div>
+
+<div id="warn" class="warn"></div>
 
 <div class="copy" onclick="copy()">Copy Result</div>
 
 </div>
 
 </div>
-
 </div>
 
 <script>
@@ -176,40 +199,31 @@ let volumeData=[]
 let mapData=[]
 
 function readExcel(file){
-
 return new Promise(resolve=>{
-
 let reader=new FileReader()
-
 reader.onload=e=>{
-
 let data=new Uint8Array(e.target.result)
-
 let wb=XLSX.read(data,{type:"array"})
-
 let sheet=wb.Sheets[wb.SheetNames[0]]
-
 let json=XLSX.utils.sheet_to_json(sheet)
-
 resolve(json)
-
 }
-
 reader.readAsArrayBuffer(file)
-
 })
-
 }
 
 function cleanZip(z){
-
 if(!z)return null
-
 z=String(z)
-
 return z.substring(0,5)
-
 }
+
+/* upload click */
+
+volUpload.onclick=()=>volInput.click()
+mapUpload.onclick=()=>mapInput.click()
+
+/* volume upload */
 
 volInput.onchange=async()=>{
 
@@ -217,9 +231,17 @@ let f=volInput.files[0]
 
 volumeData=await readExcel(f)
 
-volInfo.innerText="✓ "+f.name+"  ("+volumeData.length+" rows)"
+let count=volumeData.length
+
+volUpload.classList.add("success")
+
+volInfo.innerHTML=
+"✓ Current Volume File Uploaded<br>"+
+count.toLocaleString()+" packages detected"
 
 }
+
+/* mapping upload */
 
 mapInput.onchange=async()=>{
 
@@ -227,15 +249,24 @@ let f=mapInput.files[0]
 
 mapData=await readExcel(f)
 
-mapInfo.innerText="✓ "+f.name+"  ("+mapData.length+" rules)"
+let rules=mapData.length
+
+mapUpload.classList.add("success")
+
+mapInfo.innerHTML=
+"✓ ZIP Mapping Uploaded<br>"+
+rules.toLocaleString()+" ZIP rules loaded"
 
 }
+
+/* add volume */
 
 addVol.oninput=()=>{
 
 let v=parseFloat(addVol.value||0)
 
-equiv.innerText="Equivalent: "+(v*10000).toLocaleString()+" packages"
+equiv.innerText=
+"Equivalent: "+(v*10000).toLocaleString()+" packages"
 
 }
 
@@ -244,15 +275,11 @@ addVol.oninput()
 async function run(){
 
 if(!volumeData.length||!mapData.length){
-
 alert("Upload both files")
-
 return
-
 }
 
 let map={}
-
 mapData.forEach(r=>{
 
 let zip=cleanZip(r["Zipcode"]||r["ZIP"]||r["邮编"])
@@ -260,18 +287,15 @@ let zip=cleanZip(r["Zipcode"]||r["ZIP"]||r["邮编"])
 if(!zip)return
 
 map[zip]={
-
 territory:r["Territory"]||r["路区"],
-
 dsp:r["DSP"]
-
 }
 
 })
 
 let pivot={}
-
 let currentTotal=0
+let unmapped=0
 
 volumeData.forEach(r=>{
 
@@ -281,16 +305,16 @@ if(!zip)return
 
 let info=map[zip]
 
-if(!info)return
+if(!info){
+unmapped++
+return
+}
 
 let dsp=info.dsp
-
 let ter=info.territory
 
 if(!pivot[dsp])pivot[dsp]={}
-
 if(!pivot[dsp][ter])pivot[dsp][ter]={}
-
 if(!pivot[dsp][ter][zip])pivot[dsp][ter][zip]=0
 
 pivot[dsp][ter][zip]++
@@ -300,7 +324,6 @@ currentTotal++
 })
 
 let add=parseFloat(addVol.value||0)*10000
-
 let multiplier=(currentTotal+add)/currentTotal
 
 let out=""
@@ -310,26 +333,23 @@ Object.keys(pivot).forEach(dsp=>{
 let dspTotal=0
 
 Object.values(pivot[dsp]).forEach(t=>{
-
 Object.values(t).forEach(c=>dspTotal+=c)
-
 })
 
-out+=`${dsp}  ${Math.round(dspTotal*multiplier)}\n`
+out+=dsp.padEnd(25)+" "+Math.round(dspTotal*multiplier)+"\n"
 
 Object.keys(pivot[dsp]).forEach(ter=>{
 
 let terTotal=0
-
 Object.values(pivot[dsp][ter]).forEach(c=>terTotal+=c)
 
-out+=`   ${ter}  ${Math.round(terTotal*multiplier)}\n`
+out+="   "+ter.padEnd(22)+" "+Math.round(terTotal*multiplier)+"\n"
 
 Object.keys(pivot[dsp][ter]).forEach(zip=>{
 
 let c=pivot[dsp][ter][zip]
 
-out+=`      ${zip}  ${Math.round(c*multiplier)}\n`
+out+="      "+zip.padEnd(18)+" "+Math.round(c*multiplier)+"\n"
 
 })
 
@@ -341,11 +361,21 @@ out+="\n"
 
 output.textContent=out
 
+warn.innerText=unmapped?("⚠ "+unmapped+" ZIP codes not mapped"):""
+
 }
+
+/* copy */
 
 function copy(){
 
 navigator.clipboard.writeText(output.textContent)
+
+let btn=document.querySelector(".copy")
+
+btn.innerText="Copied ✓"
+
+setTimeout(()=>btn.innerText="Copy Result",1500)
 
 }
 
