@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Route Forecast Tool</title>
+
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
 <style>
@@ -23,7 +24,6 @@ margin:auto;
 .header{
 font-size:28px;
 font-weight:600;
-margin-bottom:4px;
 }
 
 .sub{
@@ -58,14 +58,20 @@ margin-bottom:6px;
 .upload{
 border:1px dashed rgba(255,255,255,0.15);
 border-radius:10px;
-padding:20px;
+padding:28px;
 text-align:center;
 cursor:pointer;
 transition:0.2s;
+position:relative;
 }
 
 .upload:hover{
 border-color:rgba(255,255,255,0.35);
+}
+
+.upload.drag{
+border-color:#E6372A;
+background:rgba(230,55,42,0.08);
 }
 
 .upload.success{
@@ -87,20 +93,6 @@ color:#E7E9EE;
 padding:8px;
 border-radius:6px;
 width:120px;
-}
-
-.button{
-margin-top:18px;
-background:#E6372A;
-border:none;
-padding:10px 16px;
-border-radius:6px;
-color:white;
-cursor:pointer;
-}
-
-.button:hover{
-background:#FF4D4F;
 }
 
 .result{
@@ -131,10 +123,34 @@ font-size:13px;
 margin-top:10px;
 }
 
+/* Drop overlay */
+
+.overlay{
+position:fixed;
+inset:0;
+background:rgba(0,0,0,0.65);
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:28px;
+font-weight:600;
+pointer-events:none;
+opacity:0;
+transition:0.15s;
+}
+
+.overlay.show{
+opacity:1;
+}
+
 </style>
 </head>
 
 <body>
+
+<div class="overlay" id="overlay">
+Drop file to upload
+</div>
 
 <div class="container">
 
@@ -143,40 +159,50 @@ margin-top:10px;
 
 <div class="layout">
 
-<!-- INPUT PANEL -->
-
 <div class="card">
 
 <div class="section">
+
 <div class="label">Current Volume File</div>
+
 <div id="volUpload" class="upload">
 Drag file here or click to upload
 </div>
+
 <input type="file" id="volInput" hidden>
+
 <div id="volInfo" class="info"></div>
+
 </div>
 
+
 <div class="section">
+
 <div class="label">ZIP Mapping File</div>
+
 <div id="mapUpload" class="upload">
 Drag file here or click to upload
 </div>
+
 <input type="file" id="mapInput" hidden>
+
 <div id="mapInfo" class="info"></div>
+
 </div>
+
 
 <div class="section">
+
 <div class="label">Add Volume (10k units)</div>
+
 <input id="addVol" value="1.0">
+
 <div id="equiv" class="info"></div>
-</div>
-
-<button class="button" onclick="run()">Generate Forecast</button>
 
 </div>
 
+</div>
 
-<!-- RESULT PANEL -->
 
 <div class="card">
 
@@ -199,37 +225,89 @@ let volumeData=[]
 let mapData=[]
 
 function readExcel(file){
+
 return new Promise(resolve=>{
+
 let reader=new FileReader()
+
 reader.onload=e=>{
+
 let data=new Uint8Array(e.target.result)
+
 let wb=XLSX.read(data,{type:"array"})
+
 let sheet=wb.Sheets[wb.SheetNames[0]]
+
 let json=XLSX.utils.sheet_to_json(sheet)
+
 resolve(json)
+
 }
+
 reader.readAsArrayBuffer(file)
+
 })
+
 }
 
 function cleanZip(z){
+
 if(!z)return null
-z=String(z)
-return z.substring(0,5)
+
+return String(z).substring(0,5)
+
 }
 
-/* upload click */
+/* click upload */
 
 volUpload.onclick=()=>volInput.click()
 mapUpload.onclick=()=>mapInput.click()
 
+/* drag overlay */
+
+window.addEventListener("dragenter",()=>overlay.classList.add("show"))
+
+window.addEventListener("dragleave",e=>{
+if(e.clientX===0&&e.clientY===0)
+overlay.classList.remove("show")
+})
+
+window.addEventListener("drop",()=>overlay.classList.remove("show"))
+
+/* drag zone */
+
+function setupDrop(zone,input,handler){
+
+zone.addEventListener("dragover",e=>{
+e.preventDefault()
+zone.classList.add("drag")
+})
+
+zone.addEventListener("dragleave",()=>{
+zone.classList.remove("drag")
+})
+
+zone.addEventListener("drop",async e=>{
+
+e.preventDefault()
+
+zone.classList.remove("drag")
+
+let file=e.dataTransfer.files[0]
+
+input.files=e.dataTransfer.files
+
+await handler(file)
+
+})
+
+}
+
 /* volume upload */
 
-volInput.onchange=async()=>{
+async function handleVolume(file){
 
-let f=volInput.files[0]
-
-volumeData=await readExcel(f)
+volumeData=await readExcel(file)
 
 let count=volumeData.length
 
@@ -239,15 +317,17 @@ volInfo.innerHTML=
 "✓ Current Volume File Uploaded<br>"+
 count.toLocaleString()+" packages detected"
 
+updateForecast()
+
 }
+
+volInput.onchange=()=>handleVolume(volInput.files[0])
 
 /* mapping upload */
 
-mapInput.onchange=async()=>{
+async function handleMap(file){
 
-let f=mapInput.files[0]
-
-mapData=await readExcel(f)
+mapData=await readExcel(file)
 
 let rules=mapData.length
 
@@ -257,29 +337,35 @@ mapInfo.innerHTML=
 "✓ ZIP Mapping Uploaded<br>"+
 rules.toLocaleString()+" ZIP rules loaded"
 
+updateForecast()
+
 }
 
-/* add volume */
+mapInput.onchange=()=>handleMap(mapInput.files[0])
+
+setupDrop(volUpload,volInput,handleVolume)
+setupDrop(mapUpload,mapInput,handleMap)
+
+/* volume input */
 
 addVol.oninput=()=>{
 
 let v=parseFloat(addVol.value||0)
 
-equiv.innerText=
-"Equivalent: "+(v*10000).toLocaleString()+" packages"
+equiv.innerText="Equivalent: "+(v*10000).toLocaleString()+" packages"
+
+updateForecast()
 
 }
 
 addVol.oninput()
 
-async function run(){
+function updateForecast(){
 
-if(!volumeData.length||!mapData.length){
-alert("Upload both files")
-return
-}
+if(!volumeData.length||!mapData.length)return
 
 let map={}
+
 mapData.forEach(r=>{
 
 let zip=cleanZip(r["Zipcode"]||r["ZIP"]||r["邮编"])
@@ -287,8 +373,11 @@ let zip=cleanZip(r["Zipcode"]||r["ZIP"]||r["邮编"])
 if(!zip)return
 
 map[zip]={
+
 territory:r["Territory"]||r["路区"],
+
 dsp:r["DSP"]
+
 }
 
 })
@@ -341,6 +430,7 @@ out+=dsp.padEnd(25)+" "+Math.round(dspTotal*multiplier)+"\n"
 Object.keys(pivot[dsp]).forEach(ter=>{
 
 let terTotal=0
+
 Object.values(pivot[dsp][ter]).forEach(c=>terTotal+=c)
 
 out+="   "+ter.padEnd(22)+" "+Math.round(terTotal*multiplier)+"\n"
