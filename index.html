@@ -251,6 +251,7 @@ let volumeData = []
 let mapData = []
 let zipMap = null // { zip: { dsp, route } }
 let mapKeys = { zip:null, dsp:null, route:null }
+let globalTotal = 0
 const ALLOWED_STATIONS = ["MIA","SRQ","FTM","WPB"]
 let stationSelected = new Set() // default none
 let lastPivot = null // store last pivot for copy
@@ -360,6 +361,7 @@ function setupStationBar(){
       if(btn.classList.contains("active")) stationSelected.add(s)
       else stationSelected.delete(s)
       checkReady()
+      updateEquiv()
     }
     stationBar.appendChild(btn)
   }
@@ -412,14 +414,16 @@ async function handleVolume(file){
     return
   }
   volumeData = await readExcel(file)
-  volUpload.classList.add("success")
-  volInfo.innerHTML = "✓ Current Volume File Uploaded<br>"+volumeData.length.toLocaleString()+" packages detected"
+  globalTotal = volumeData.length
 
+  volUpload.classList.add("success")
+  volInfo.innerHTML = "✓ Current Volume File Uploaded<br>" + globalTotal.toLocaleString() + " packages detected"
   // DO NOT auto-generate pivot
   lastPivot = null
   clearTable()
 
   checkReady()
+  updateEquiv()
 }
 
 async function handleMap(file){
@@ -443,11 +447,24 @@ async function handleMap(file){
 volInput.onchange = ()=>handleVolume(volInput.files[0])
 mapInput.onchange = ()=>handleMap(mapInput.files[0])
 
-addVol.oninput = ()=>{
+function updateEquiv(){
   const v = parseAddVol()
-  equiv.innerText = "Equivalent: "+(v*10000).toLocaleString()+" packages"
+  const add = v * 10000
+
+  if(globalTotal > 0){
+    const multiplier = (globalTotal + add) / globalTotal
+    const pct = ((multiplier - 1) * 100).toFixed(2)
+
+    equiv.innerHTML =
+      "Equivalent: " + add.toLocaleString() + " packages" +
+      "<br>Multiplier: " + multiplier.toFixed(4) + "x (+" + pct + "%)"
+  }else{
+    equiv.innerText = "Equivalent: " + add.toLocaleString() + " packages"
+  }
 }
-addVol.oninput()
+
+addVol.oninput = updateEquiv
+updateEquiv()
 
 /* ---------------- Pivot core ---------------- */
 function clearTable(){
@@ -489,7 +506,7 @@ function buildPivot(){
     total++
   }
 
-  return { pivot, total, zipMissing, notInMap, missingFields }
+  return { pivot, total, notInMap, missingFields }
 }
 
 /* Render Excel-style hierarchy (DSP total row, Route total row, ZIP rows) */
@@ -557,29 +574,46 @@ function renderPivot(pivotObj, multiplier){
    ZIP row: C=zip, D=count
 */
 function buildExcelHierarchyTSV(pivotObj, multiplier){
+
   const lines = []
+  let grandTotal = 0
 
   const dsps = Object.keys(pivotObj).sort((a,b)=>a.localeCompare(b))
+
   for(const dsp of dsps){
+
     let dspTotal = 0
     for(const route of Object.keys(pivotObj[dsp])){
       for(const c of Object.values(pivotObj[dsp][route])) dspTotal += c
     }
+
     lines.push(`${dsp}\t\t\t${Math.round(dspTotal*multiplier)}`)
 
     const routes = Object.keys(pivotObj[dsp]).sort((a,b)=>a.localeCompare(b))
+
     for(const route of routes){
+
       let routeTotal = 0
       for(const c of Object.values(pivotObj[dsp][route])) routeTotal += c
+
       lines.push(`\t${route}\t\t${Math.round(routeTotal*multiplier)}`)
 
       const zips = Object.keys(pivotObj[dsp][route]).sort()
+
       for(const zip of zips){
+
         const c = pivotObj[dsp][route][zip]
-        lines.push(`\t\t${zip}\t${Math.round(c*multiplier)}`)
+        const val = Math.round(c*multiplier)
+
+        grandTotal += val
+
+        lines.push(`\t\t${zip}\t${val}`)
       }
     }
   }
+
+  lines.push("")
+  lines.push(`总计\t\t\t${grandTotal}`)
 
   return lines.join("\n")
 }
@@ -594,36 +628,42 @@ runBtn.onclick = () => {
 
   setTimeout(()=>{
 
-    const { pivot, total, zipMissing, notInMap, missingFields } = buildPivot()
+       const { pivot, total: mappedTotal, notInMap, missingFields } = buildPivot()
 
-    if(total===0){
-      clearTable()
-      warn.textContent = "No valid packages detected (check ZIP & mapping columns)."
-      runBtn.textContent = oldText
-      checkReady()
-      return
-    }
+       if(globalTotal === 0){
+              clearTable()
+              warn.textContent = "No packages detected in volume file."
+              runBtn.textContent = oldText
+              checkReady()
+              return
+       }
 
-    // multiplier for forecast
-    const add = parseAddVol()*10000
-    const multiplier = (total + add) / total
+       // 允许 pivot 为空：说明当前 filter 下没有可映射数据（但 multiplier 仍然是全局的）
+       if(mappedTotal === 0){
+              clearTable()
+              warn.textContent = "No mapped packages for current filter (check mapping / ZIP)."
+              runBtn.textContent = oldText
+              checkReady()
+              return
+       }
 
-    // store for copy
-    lastPivot = { pivot, multiplier }
+       const add = parseAddVol() * 10000
+       const multiplier = (globalTotal + add) / globalTotal
 
-    renderPivot(pivot, multiplier)
+       lastPivot = { pivot, multiplier }
 
-    // enable copy
-    copyBtn.disabled = false
+       renderPivot(pivot, multiplier)
 
-    warn.textContent = (notInMap || missingFields)
-      ? `⚠ Unmapped: ${notInMap.toLocaleString()} (ZIP not in mapping) + ${missingFields.toLocaleString()} (mapping missing DSP/Route)`
-      : ""
+       copyBtn.disabled = false
 
-    runBtn.textContent = oldText
-    checkReady()
+       warn.textContent = (notInMap || missingFields)
+       ? `⚠ Unmapped: ${notInMap.toLocaleString()} (ZIP not in mapping) + ${missingFields.toLocaleString()} (mapping missing DSP/Route)`
+       : ""
 
-  },40)
+       runBtn.textContent = oldText
+       checkReady()
+
+       }, 40)
 }
 
 /* ---------------- Copy ---------------- */
